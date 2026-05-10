@@ -72,7 +72,7 @@ void Parser::parseAssignment() {
     std::cerr << "Assignment parsing simplified for this version\n";
 }
 
-// Parse if-else block
+// Parse if-else block - Fixed version with proper operation handling
 void Parser::parseIfElse() {
     auto builder = getBuilder();
     auto valueStack = getValueStack();
@@ -101,48 +101,90 @@ void Parser::parseIfElse() {
         builder->getContext(), "end_if", func
     );
     
-    // Create conditional branch
+    // Create conditional branch from entry to then/else
     builder->CreateCondBr(cond, thenBlock, elseBlock);
     
-    // Process then block
+    // ===== THEN BLOCK =====
     builder->SetInsertPoint(thenBlock);
-    
-    // Skip ahead to process then body (simplified - in real parser would recursively parse)
     advance(); // skip 'if'
+    
+    // Parse all operations in then block until we hit else/end
     while (currentIndex < tokens.size() && 
            tokens[currentIndex].type != TokenType::ELSE && 
            tokens[currentIndex].type != TokenType::END) {
         parseExpression();
     }
     
-    // Jump to end if no explicit return
-    if (builder->GetInsertBlock()->getTerminator() == nullptr) {
+    // Capture the result from then block
+    llvm::Value* thenResult = nullptr;
+    if (!valueStack->empty()) {
+        thenResult = valueStack->top();
+        valueStack->pop();
+    }
+    
+    // Get the block we're currently in (might have changed during parsing)
+    llvm::BasicBlock* thenBlockEnd = builder->GetInsertBlock();
+    
+    // Branch to end if no terminator exists
+    if (thenBlockEnd->getTerminator() == nullptr) {
         builder->CreateBr(endBlock);
     }
     
-    // Process else block
+    // ===== ELSE BLOCK =====
     builder->SetInsertPoint(elseBlock);
     
+    llvm::Value* elseResult = nullptr;
     if (currentToken().type == TokenType::ELSE) {
         advance(); // skip 'else'
+        
+        // Parse all operations in else block until we hit end
         while (currentIndex < tokens.size() && 
                tokens[currentIndex].type != TokenType::END) {
             parseExpression();
         }
+        
+        // Capture the result from else block
+        if (!valueStack->empty()) {
+            elseResult = valueStack->top();
+            valueStack->pop();
+        }
     }
     
-    // Jump to end
-    if (builder->GetInsertBlock()->getTerminator() == nullptr) {
+    // Get the block we're currently in
+    llvm::BasicBlock* elseBlockEnd = builder->GetInsertBlock();
+    
+    // Branch to end if no terminator exists
+    if (elseBlockEnd->getTerminator() == nullptr) {
         builder->CreateBr(endBlock);
     }
     
-    // Continue at end block
+    // ===== END BLOCK (PHI MERGE) =====
     builder->SetInsertPoint(endBlock);
     
+    // Create phi node to merge results from then and else
+    if (thenResult != nullptr && elseResult != nullptr) {
+        // Both branches have results - merge with phi
+        llvm::Type* resultType = thenResult->getType();
+        llvm::PHINode* phiNode = builder->CreatePHI(resultType, 2, "if_result");
+        phiNode->addIncoming(thenResult, thenBlockEnd);
+        phiNode->addIncoming(elseResult, elseBlockEnd);
+        valueStack->push(phiNode);
+    } else if (thenResult != nullptr) {
+        // Only then has result
+        valueStack->push(thenResult);
+    } else if (elseResult != nullptr) {
+        // Only else has result
+        valueStack->push(elseResult);
+    }
+    
+    // Skip 'end' token
     if (currentToken().type == TokenType::END) {
-        advance(); // skip 'end'
+        advance();
     }
 }
+
+// Static variable to track last identifier for assignment
+static std::string lastIdentifier = "";
 
 // Parse expressions: numbers, operations, variables
 void Parser::parseExpression() {
@@ -161,16 +203,13 @@ void Parser::parseExpression() {
         
         case TokenType::IDENTIFIER: {
             std::string varName = token.value;
+            lastIdentifier = varName;  // Store for potential assignment
             advance();
             
             // Check if next token is assignment
             if (currentToken().type == TokenType::ASSIGN) {
-                advance(); // skip '='
-                if (!valueStack->empty()) {
-                    llvm::Value* value = valueStack->top();
-                    valueStack->pop();
-                    setVariable(varName, value);
-                }
+                // Don't process here; let ASSIGN handler deal with it
+                // Just advance past the identifier
             } else {
                 // Load variable value
                 llvm::Value* val = getVariable(varName);
@@ -205,6 +244,17 @@ void Parser::parseExpression() {
         
         case TokenType::GREATER: {
             emitGreater();
+            advance();
+            break;
+        }
+        
+        case TokenType::ASSIGN: {
+            // Pop value from stack and assign to the last identifier
+            if (!valueStack->empty()) {
+                llvm::Value* value = valueStack->top();
+                valueStack->pop();
+                setVariable(lastIdentifier, value);
+            }
             advance();
             break;
         }
