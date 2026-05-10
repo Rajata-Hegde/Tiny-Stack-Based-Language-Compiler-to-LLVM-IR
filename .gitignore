@@ -1,0 +1,19 @@
+# Compiled compiler executable
+compiler
+
+# Generated LLVM IR files
+*.ll
+
+# Compiled native binaries from LLVM IR
+*.bin
+
+# Output logs and text files
+*.output.txt
+
+# Archives
+*.tar.gz
+
+# Ignore all markdown files...
+*.md
+# ...except the main README.md
+!README.md

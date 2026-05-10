@@ -1,13 +1,14 @@
 #!/bin/bash
 
-# Build script for Stack-Based Language Compiler
-# This script compiles the project using LLVM
+# ============================================================
+# Build script for Enhanced Stack-Based Language Compiler
+# ============================================================
 
 set -e  # Exit on any error
 
-echo "======================================"
-echo "Stack Language Compiler - Build Script"
-echo "======================================"
+echo "=============================================="
+echo "Stack Language Compiler - Enhanced Build Script"
+echo "=============================================="
 echo ""
 
 # Check if llvm-config is available
@@ -29,11 +30,16 @@ LLVM_SYSTEM_LIBS=$(llvm-config --system-libs)
 LLVM_LIBS=$(llvm-config --libs core)
 
 echo "Compiling source files..."
+echo "  - main.cpp"
+echo "  - lexer.cpp"
+echo "  - parser.cpp"
+echo "  - codegen.cpp"
+echo "  - validator.cpp"
 echo ""
 
 # Compile with LLVM support
 g++ -fPIC \
-    main.cpp lexer.cpp parser.cpp codegen.cpp \
+    main.cpp lexer.cpp parser.cpp codegen.cpp validator.cpp \
     ${LLVM_CXXFLAGS} \
     ${LLVM_LDFLAGS} \
     ${LLVM_SYSTEM_LIBS} \
@@ -45,13 +51,30 @@ if [ -f compiler ]; then
     echo "  Executable: ./compiler"
     echo ""
     echo "Usage:"
-    echo "  ./compiler <input_file.sl>"
+    echo "  ./compiler <input_file.sl>              # Compile and print IR"
+    echo "  ./compiler --validate-only <file.sl>    # Validate only"
+    echo "  ./compiler --help                       # Show all options"
     echo ""
-    echo "Examples:"
-    echo "  ./compiler program1.sl"
-    echo "  ./compiler program2.sl"
-    echo "  ./compiler program3.sl"
-    echo "  ./compiler program4.sl"
+    echo "Run + Execute workflow:"
+    echo "  ./compiler program.sl > output.ll       # Save IR to file"
+    echo "  clang output.ll -o program              # Compile IR to native"
+    echo "  ./program                               # Run the program"
+    echo ""
+    echo "Example programs:"
+    echo "  ./compiler program1.sl    # Simple addition"
+    echo "  ./compiler program2.sl    # Arithmetic chain"
+    echo "  ./compiler program3.sl    # Variables"
+    echo "  ./compiler program4.sl    # If-else control flow"
+    echo "  ./compiler program5.sl    # I/O: print"
+    echo "  ./compiler program6.sl    # I/O: input + print"
+    echo "  ./compiler program7.sl    # Stack ops: dup, swap, neg"
+    echo "  ./compiler program8.sl    # Comparisons"
+    echo "  ./compiler program9.sl    # Complex: calculator"
+    echo ""
+    echo "Error test programs:"
+    echo "  ./compiler error1.sl      # Stack underflow"
+    echo "  ./compiler error2.sl      # Unbalanced if/end"
+    echo "  ./compiler error3.sl      # Undefined variable"
 else
     echo "✗ Build failed!"
     exit 1
