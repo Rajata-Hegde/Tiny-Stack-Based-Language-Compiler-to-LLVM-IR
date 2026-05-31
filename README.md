@@ -223,7 +223,6 @@ Open `visualizer.html` in your web browser to:
 
 ## Screenshots
 
-Add your screenshots to the `images/` folder and they will render below. Example files: `images/errir.png`, `images/testcase.png`.
 
 <p align="center">
    <img src="images/error.png" alt="Error example" width="800" />
