@@ -508,3 +508,6 @@ entry:
 ├── program[1-9].sl   # Sample programs
 └── error[1-3].sl     # Error test cases
 ```
+<p align="center">
+  <img src="images/visualizer.png" alt="Visualizer" width="900" />
+</p>
