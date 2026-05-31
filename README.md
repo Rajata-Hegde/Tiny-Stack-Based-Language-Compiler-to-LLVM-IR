@@ -221,6 +221,18 @@ Open `visualizer.html` in your web browser to:
 - Float Operations: `3.14 2 * print`
 - Stack Operations: `1 2 3 + dup swap`
 
+## Screenshots
+
+Add your screenshots to the `images/` folder and they will render below. Example files: `images/errir.png`, `images/testcase.png`.
+
+<p align="center">
+   <img src="images/error.png" alt="Error example" width="800" />
+</p>
+
+<p align="center">
+   <img src="images/testcase.png" alt="Test case output" width="800" />
+</p>
+
 ## Real-World Example Programs
 
 ### 1. Rectangle Area Calculator (`rectangle_calc.sl`)
@@ -508,6 +520,3 @@ entry:
 ├── program[1-9].sl   # Sample programs
 └── error[1-3].sl     # Error test cases
 ```
-<p align="center">
-  <img src="images/visualizer.png" alt="Visualizer" width="900" />
-</p>
