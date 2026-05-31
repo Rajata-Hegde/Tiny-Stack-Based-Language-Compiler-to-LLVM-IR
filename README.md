@@ -316,7 +316,7 @@ end
 | Interactive Visualizer | ✅ Complete | Web-based real-time visualization |
 | Real-World Examples | ✅ Complete | 5 production-quality programs |
 | Documentation | ✅ Complete | Comprehensive guides & comparisons |
-| For Loops | 🚧 In Progress | Foundation laid, implementation underway |
+| For Loops | ✅ Complete | Implemented: `for` and `repeat` constructs |
 | Loop Unrolling | 📋 Planned | Performance optimization |
 | Tail Call Optimization | 📋 Planned | Reduce stack overhead |
 
@@ -366,15 +366,6 @@ clang output.ll -o program -lc
 
 **Float precision issues:**
 All floats are 64-bit doubles; use appropriate print formatting.
-
-## Contributing
-
-We welcome contributions! Areas for enhancement:
-- [ ] Complete for-loop implementation
-- [ ] Additional built-in functions (sqrt, sin, cos, etc.)
-- [ ] Debugger with breakpoints
-- [ ] Optimization passes
-- [ ] Additional example programs
 
 ## License
 

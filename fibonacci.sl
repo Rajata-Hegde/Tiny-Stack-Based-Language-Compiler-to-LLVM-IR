@@ -13,8 +13,7 @@ curr print
 // Loop to compute fibonacci (simple iteration without for loop)
 1 iter =
 
-// Note: Full for-loop support coming soon
-// For now using if-else chain with manual iteration
+// For loop support available — examples use `for` / `repeat` in other programs
 
 iter 1 =
 curr next =

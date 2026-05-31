@@ -384,7 +384,7 @@ entry:
 ## Limitations
 
 - **Single function**: Only generates `main()` function
-- **No loops**: While/for loops not supported
+- **Loops**: `for` and `repeat` constructs are supported (see `README.md` and `visualizer.html` examples)
 - **No function calls**: Cannot define or call functions
 - **No dynamic allocation**: No heap memory management
 - **No floating point**: Only 32-bit integers
