@@ -36,7 +36,7 @@ If you are on Windows please use WSL or follow instructions in `WSL_QUICKSTART.m
 - **Type Conversion**: `i2f` (int-to-float) and `f2i` (float-to-int) instructions
 - **Enhanced I/O**: `print` and `println` automatically handle floats and integers
 - **Stack Operations**: New `drop` instruction to discard values
-- **For Loop Support**: Preparation for loop constructs (coming soon)
+- **For Loop Support**: ✅ Implemented — `for` and `repeat` loop constructs are available
 - **Interactive Visualizer**: Web-based UI to visualize stack execution in real-time
 - **Real-World Examples**: Financial calculations, statistics, temperature conversion, etc.
 
@@ -121,8 +121,8 @@ Source (.sl) ──► Lexer ──► Tokens ──► Validator ──► Pars
 | `if`        | cond →               | Pop condition; branch to then/else     |
 | `else`      | —                    | Start else branch                      |
 | `end`       | —                    | Close if/else block                    |
-| `for`       | —                    | **COMING SOON**: Loop construct        |
-| `repeat`    | —                    | **COMING SOON**: Repeat n times        |
+| `for`       | —                    | Loop construct: iterate with start, end, and optional step (implemented) |
+| `repeat`    | —                    | Repeat a block `n` times (implemented) |
 
 ## Usage Examples
 
@@ -276,6 +276,23 @@ Integer arithmetic sequence:
 ```
 
 ## Documentation
+
+### Loop Examples
+
+For loop (inclusive range with step):
+```
+# Syntax (example): start end step for ... end
+0 10 1 for    # iterate from 0 to 10 by 1
+   dup print
+end
+```
+
+Repeat (repeat a block `n` times):
+```
+5 repeat      # repeat the following block 5 times
+   1 print
+end
+```
 
 ### Architecture & Design
 - [STACK_TO_SSA_EXPLANATION.md](STACK_TO_SSA_EXPLANATION.md) — How stack maps to SSA values
