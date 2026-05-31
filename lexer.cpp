@@ -29,18 +29,28 @@ TokenType Lexer::identifyKeywordOrOperator(const std::string& str) {
     if (str == "!=") return TokenType::NOT_EQUAL;
 
     // Keywords — control flow
-    if (str == "if")    return TokenType::IF;
-    if (str == "else")  return TokenType::ELSE;
-    if (str == "end")   return TokenType::END;
+    if (str == "if")       return TokenType::IF;
+    if (str == "else")     return TokenType::ELSE;
+    if (str == "end")      return TokenType::END;
+    if (str == "for")      return TokenType::FOR;
+    if (str == "repeat")   return TokenType::REPEAT;
+    if (str == "break")    return TokenType::BREAK;
+    if (str == "continue") return TokenType::CONTINUE;
 
     // Keywords — I/O
-    if (str == "print") return TokenType::PRINT;
-    if (str == "input") return TokenType::INPUT;
+    if (str == "print")    return TokenType::PRINT;
+    if (str == "println")  return TokenType::PRINTLN;
+    if (str == "input")    return TokenType::INPUT;
 
     // Keywords — stack manipulation
-    if (str == "dup")   return TokenType::DUP;
-    if (str == "swap")  return TokenType::SWAP;
-    if (str == "neg")   return TokenType::NEG;
+    if (str == "dup")      return TokenType::DUP;
+    if (str == "swap")     return TokenType::SWAP;
+    if (str == "neg")      return TokenType::NEG;
+    if (str == "drop")     return TokenType::DROP;
+
+    // Keywords — type conversion
+    if (str == "f2i")      return TokenType::F2I;
+    if (str == "i2f")      return TokenType::I2F;
 
     // Anything else is an identifier (variable name)
     return TokenType::IDENTIFIER;
@@ -106,16 +116,28 @@ std::vector<Token> Lexer::tokenize() {
         }
 
         // --------------------------------------------------
-        // Numbers (integer literals, possibly negative via NEG)
+        // Numbers (integer or floating-point literals)
         // --------------------------------------------------
         if (std::isdigit(ch)) {
             std::string numStr;
-            while (pos < input.size() && std::isdigit(input[pos])) {
+            bool isFloat = false;
+            while (pos < input.size() && (std::isdigit(input[pos]) || input[pos] == '.')) {
+                if (input[pos] == '.') {
+                    if (isFloat) {
+                        // Second decimal point — error
+                        break;
+                    }
+                    isFloat = true;
+                }
                 numStr += input[pos];
                 pos++;
                 curCol++;
             }
-            tokens.push_back(Token(TokenType::NUMBER, numStr, tokLine, tokCol));
+            if (isFloat) {
+                tokens.push_back(Token(TokenType::FLOAT, numStr, tokLine, tokCol));
+            } else {
+                tokens.push_back(Token(TokenType::NUMBER, numStr, tokLine, tokCol));
+            }
             continue;
         }
 

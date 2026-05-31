@@ -13,6 +13,7 @@ extern void initializeCodegen();
 extern llvm::Function* createMainFunction();
 extern void emitReturn();
 extern void emitPushConstant(int value);
+extern void emitPushFloatConstant(double value);
 extern llvm::Value* getVariable(const std::string& name);
 extern void setVariable(const std::string& name, llvm::Value* value);
 extern void emitAdd();
@@ -27,7 +28,11 @@ extern void emitNotEqual();
 extern void emitDup();
 extern void emitSwap();
 extern void emitNeg();
+extern void emitDrop();
+extern void emitF2I();
+extern void emitI2F();
 extern void emitPrint();
+extern void emitPrintln();
 extern void emitInput();
 extern void printIR();
 extern bool verifyIR();
@@ -117,6 +122,24 @@ void Parser::parseIfElse() {
     llvm::Value* cond = valueStack->top();
     valueStack->pop();
 
+    // Ensure condition is an i1 boolean for CreateCondBr.
+    // If it's a double, compare against 0.0; if it's an integer width > 1, compare != 0.
+    llvm::Value* condBool = cond;
+    llvm::LLVMContext &ctx = builder->getContext();
+    if (cond->getType()->isDoubleTy()) {
+        condBool = builder->CreateFCmpONE(cond, llvm::ConstantFP::get(cond->getType(), 0.0), "ifcond");
+    } else if (cond->getType()->isIntegerTy()) {
+        if (cond->getType()->getIntegerBitWidth() == 1) {
+            // already i1
+            condBool = cond;
+        } else {
+            condBool = builder->CreateICmpNE(cond, llvm::ConstantInt::get(cond->getType(), 0), "ifcond");
+        }
+    } else {
+        // Fallback: try to compare as integer against zero
+        condBool = builder->CreateICmpNE(cond, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 0), "ifcond");
+    }
+
     // Get the current function
     llvm::BasicBlock* currentBlock = builder->GetInsertBlock();
     llvm::Function* func = currentBlock->getParent();
@@ -133,7 +156,7 @@ void Parser::parseIfElse() {
     );
 
     // Create conditional branch from entry to then/else
-    builder->CreateCondBr(cond, thenBlock, elseBlock);
+    builder->CreateCondBr(condBool, thenBlock, elseBlock);
 
     // ===== THEN BLOCK =====
     builder->SetInsertPoint(thenBlock);
@@ -235,6 +258,13 @@ void Parser::parseExpression() {
             break;
         }
 
+        case TokenType::FLOAT: {
+            double value = std::stod(token.value);
+            emitPushFloatConstant(value);
+            advance();
+            break;
+        }
+
         case TokenType::IDENTIFIER: {
             std::string varName = token.value;
             lastIdentifier = varName;  // Store for potential assignment
@@ -272,12 +302,27 @@ void Parser::parseExpression() {
         case TokenType::DUP:     { emitDup();      advance(); break; }
         case TokenType::SWAP:    { emitSwap();     advance(); break; }
         case TokenType::NEG:     { emitNeg();      advance(); break; }
+        case TokenType::DROP:    { emitDrop();     advance(); break; }
+
+        case TokenType::F2I:     { emitF2I();      advance(); break; }
+        case TokenType::I2F:     { emitI2F();      advance(); break; }
 
         case TokenType::PRINT:   { emitPrint();    advance(); break; }
+        case TokenType::PRINTLN: { emitPrintln();  advance(); break; }
         case TokenType::INPUT:   { emitInput();    advance(); break; }
 
         case TokenType::IF: {
             parseIfElse();
+            break;
+        }
+
+        case TokenType::FOR: {
+            parseForLoop();
+            break;
+        }
+
+        case TokenType::REPEAT: {
+            parseRepeat();
             break;
         }
 
@@ -340,4 +385,167 @@ bool Parser::parse() {
     }
 
     return !hasErrors;
+}
+
+// ============================================================
+// Parse repeat block: count repeat ... end
+// ============================================================
+void Parser::parseRepeat() {
+    auto builder    = getBuilder();
+    auto valueStack = getValueStack();
+
+    if (valueStack->empty()) {
+        reportError(currentToken(), "No count value on stack for 'repeat'");
+        recoverToNext();
+        return;
+    }
+
+    llvm::Value* count = valueStack->top();
+    valueStack->pop();
+
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    llvm::LLVMContext& context = builder->getContext();
+
+    // Allocate counter variable in entry block
+    llvm::IRBuilder<> entryBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+    llvm::AllocaInst* counterVar = entryBuilder.CreateAlloca(
+        llvm::Type::getInt32Ty(context), nullptr, "repeat_counter"
+    );
+
+    // Cast count to i32 if it is double
+    if (count->getType() == llvm::Type::getDoubleTy(context)) {
+        count = builder->CreateFPToSI(count, llvm::Type::getInt32Ty(context), "cast_count");
+    }
+    builder->CreateStore(count, counterVar);
+
+    // Create blocks
+    llvm::BasicBlock* condBlock = llvm::BasicBlock::Create(context, "repeat_cond", func);
+    llvm::BasicBlock* bodyBlock = llvm::BasicBlock::Create(context, "repeat_body", func);
+    llvm::BasicBlock* exitBlock = llvm::BasicBlock::Create(context, "repeat_exit", func);
+
+    // Branch to cond
+    builder->CreateBr(condBlock);
+
+    // Cond block
+    builder->SetInsertPoint(condBlock);
+    llvm::Value* curVal = builder->CreateLoad(llvm::Type::getInt32Ty(context), counterVar, "cur_counter");
+    llvm::Value* cond = builder->CreateICmpSGT(
+        curVal, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 0), "cmp_gt_zero"
+    );
+    builder->CreateCondBr(cond, bodyBlock, exitBlock);
+
+    // Body block
+    builder->SetInsertPoint(bodyBlock);
+    advance(); // skip 'repeat'
+
+    // Parse all operations inside repeat block until end
+    while (currentIndex < tokens.size() &&
+           tokens[currentIndex].type != TokenType::END &&
+           tokens[currentIndex].type != TokenType::EOF_TOKEN) {
+        parseExpression();
+    }
+
+    // Decrement counter and branch back to cond
+    llvm::BasicBlock* currentEndBlock = builder->GetInsertBlock();
+    if (currentEndBlock->getTerminator() == nullptr) {
+        llvm::Value* loaded = builder->CreateLoad(llvm::Type::getInt32Ty(context), counterVar, "latch_counter");
+        llvm::Value* dec = builder->CreateSub(
+            loaded, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1), "dec_counter"
+        );
+        builder->CreateStore(dec, counterVar);
+        builder->CreateBr(condBlock);
+    }
+
+    // Exit block
+    builder->SetInsertPoint(exitBlock);
+
+    // Skip 'end' token
+    if (currentToken().type == TokenType::END) {
+        advance();
+    } else {
+        reportError(currentToken(), "Expected 'end' to close 'repeat' block");
+    }
+}
+
+// ============================================================
+// Parse for loop block: limit start for ... end
+// ============================================================
+void Parser::parseForLoop() {
+    auto builder    = getBuilder();
+    auto valueStack = getValueStack();
+
+    if (valueStack->size() < 2) {
+        reportError(currentToken(), "for loop requires limit and start values on stack");
+        recoverToNext();
+        return;
+    }
+
+    llvm::Value* start = valueStack->top(); valueStack->pop();
+    llvm::Value* limit = valueStack->top(); valueStack->pop();
+
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    llvm::LLVMContext& context = builder->getContext();
+
+    // Allocate index variable in entry block
+    llvm::IRBuilder<> entryBuilder(&func->getEntryBlock(), func->getEntryBlock().begin());
+    llvm::AllocaInst* indexVar = entryBuilder.CreateAlloca(
+        llvm::Type::getInt32Ty(context), nullptr, "for_index"
+    );
+
+    // Cast types to i32 if needed
+    if (start->getType() == llvm::Type::getDoubleTy(context)) {
+        start = builder->CreateFPToSI(start, llvm::Type::getInt32Ty(context), "cast_start");
+    }
+    if (limit->getType() == llvm::Type::getDoubleTy(context)) {
+        limit = builder->CreateFPToSI(limit, llvm::Type::getInt32Ty(context), "cast_limit");
+    }
+
+    // Store initial start value
+    builder->CreateStore(start, indexVar);
+
+    // Create blocks
+    llvm::BasicBlock* condBlock = llvm::BasicBlock::Create(context, "for_cond", func);
+    llvm::BasicBlock* bodyBlock = llvm::BasicBlock::Create(context, "for_body", func);
+    llvm::BasicBlock* exitBlock = llvm::BasicBlock::Create(context, "for_exit", func);
+
+    // Branch to cond
+    builder->CreateBr(condBlock);
+
+    // Cond block
+    builder->SetInsertPoint(condBlock);
+    llvm::Value* curIdx = builder->CreateLoad(llvm::Type::getInt32Ty(context), indexVar, "cur_index");
+    llvm::Value* cond = builder->CreateICmpSLT(curIdx, limit, "cmp_lt_limit");
+    builder->CreateCondBr(cond, bodyBlock, exitBlock);
+
+    // Body block
+    builder->SetInsertPoint(bodyBlock);
+    advance(); // skip 'for'
+
+    // Parse all operations inside for block until end
+    while (currentIndex < tokens.size() &&
+           tokens[currentIndex].type != TokenType::END &&
+           tokens[currentIndex].type != TokenType::EOF_TOKEN) {
+        parseExpression();
+    }
+
+    // Increment index and branch back to cond
+    llvm::BasicBlock* currentEndBlock = builder->GetInsertBlock();
+    if (currentEndBlock->getTerminator() == nullptr) {
+        llvm::Value* loaded = builder->CreateLoad(llvm::Type::getInt32Ty(context), indexVar, "latch_index");
+        llvm::Value* incremented = builder->CreateAdd(
+            loaded, llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1), "inc_index"
+        );
+        builder->CreateStore(incremented, indexVar);
+        builder->CreateBr(condBlock);
+    }
+
+    // Exit block
+    builder->SetInsertPoint(exitBlock);
+
+    // Skip 'end' token
+    if (currentToken().type == TokenType::END) {
+        advance();
+    } else {
+        reportError(currentToken(), "Expected 'end' to close 'for' block");
+    }
 }

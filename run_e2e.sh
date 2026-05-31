@@ -1,5 +1,5 @@
 #!/bin/bash
-cd '/mnt/d/git repos/Tiny-Stack-Based-Language-Compiler-to-LLVM-IR'
+
 
 echo "===== End-to-End: Compile IR -> Native Binary -> Execute ====="
 echo ""

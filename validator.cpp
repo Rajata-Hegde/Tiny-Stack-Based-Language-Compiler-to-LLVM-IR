@@ -8,7 +8,7 @@
 // ============================================================
 
 Validator::Validator(const std::vector<Token>& tokens)
-    : tokens(tokens), idx(0), simulatedStackSize(0), ifDepth(0) {}
+    : tokens(tokens), idx(0), simulatedStackSize(0), ifDepth(0), loopDepth(0) {}
 
 Token Validator::current() {
     if (idx < tokens.size()) return tokens[idx];
@@ -191,14 +191,62 @@ bool Validator::validate() {
                 break;
             }
             case TokenType::END: {
-                if (ifDepth <= 0) {
+                if (ifDepth > 0) {
+                    ifDepth--;
+                } else if (loopDepth > 0) {
+                    loopDepth--;
+                } else {
                     diags.push_back({
                         Diagnostic::ERROR, tok.line, tok.column,
-                        "'end' without matching 'if'."
+                        "'end' without matching 'if', 'for', or 'repeat'."
                     });
-                } else {
-                    ifDepth--;
                 }
+                advance();
+                break;
+            }
+
+            // Loop constructs
+            case TokenType::FOR: {
+                checkStackUnderflow(2, "for (requires limit and start)", tok);
+                if (simulatedStackSize >= 2) simulatedStackSize -= 2;  // pop limit and start
+                loopDepth++;
+                advance();
+                break;
+            }
+            case TokenType::REPEAT: {
+                checkStackUnderflow(1, "repeat (requires count)", tok);
+                if (simulatedStackSize >= 1) simulatedStackSize--;  // pop count
+                loopDepth++;
+                advance();
+                break;
+            }
+
+            case TokenType::FLOAT: {
+                simulatedStackSize++;
+                advance();
+                break;
+            }
+            case TokenType::DROP: {
+                checkStackUnderflow(1, "drop", tok);
+                if (simulatedStackSize >= 1) simulatedStackSize--;
+                advance();
+                break;
+            }
+            case TokenType::PRINTLN: {
+                checkStackUnderflow(1, "println", tok);
+                if (simulatedStackSize >= 1) simulatedStackSize--;
+                advance();
+                break;
+            }
+            case TokenType::F2I: {
+                checkStackUnderflow(1, "f2i", tok);
+                // stack size unchanged (pop 1, push 1)
+                advance();
+                break;
+            }
+            case TokenType::I2F: {
+                checkStackUnderflow(1, "i2f", tok);
+                // stack size unchanged (pop 1, push 1)
                 advance();
                 break;
             }
@@ -243,6 +291,13 @@ done:
         diags.push_back({
             Diagnostic::ERROR, 0, 0,
             std::to_string(ifDepth) + " unclosed 'if' block(s) — missing 'end'."
+        });
+    }
+    // Check for unclosed loop blocks
+    if (loopDepth > 0) {
+        diags.push_back({
+            Diagnostic::ERROR, 0, 0,
+            std::to_string(loopDepth) + " unclosed loop block(s) (for/repeat) — missing 'end'."
         });
     }
 

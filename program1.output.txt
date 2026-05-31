@@ -1,18 +1,1 @@
-; ModuleID = 'stack_lang'
-source_filename = "stack_lang"
-
-define i32 @main() {
-entry:
-  ret i32 8
-}
-==== Input Program ====
-5 3 +
-
-
-==== Tokens ====
-Token: NUMBER = "5"
-Token: NUMBER = "3"
-Token: PLUS = "+"
-Token: EOF = ""
-
-==== LLVM IR Output ====
+8

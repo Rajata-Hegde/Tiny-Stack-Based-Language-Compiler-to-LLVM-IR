@@ -12,7 +12,8 @@
 // ============================================================
 enum class TokenType {
     // Literals & Identifiers
-    NUMBER,      // Integer literals (e.g., 42)
+    NUMBER,      // Integer or float literals (e.g., 42, 3.14)
+    FLOAT,       // Floating-point literal
     IDENTIFIER,  // Variable names (e.g., x, myVar)
 
     // Arithmetic operators
@@ -35,15 +36,25 @@ enum class TokenType {
     IF,          // if
     ELSE,        // else
     END,         // end
+    FOR,         // for loop
+    REPEAT,      // repeat count times
+    BREAK,       // break out of loop
+    CONTINUE,    // continue to next iteration
 
     // I/O instructions
     PRINT,       // print  — pop TOS and print it
-    INPUT,       // input  — read integer from stdin, push onto stack
+    INPUT,       // input  — read value from stdin, push onto stack
+    PRINTLN,     // println — print with newline
 
     // Stack manipulation
     DUP,         // dup    — duplicate top of stack
     SWAP,        // swap   — swap the top two stack values
     NEG,         // neg    — negate top of stack
+    DROP,        // drop   — discard top of stack
+
+    // Type conversion
+    F2I,         // float to int
+    I2F,         // int to float
 
     // End of file
     EOF_TOKEN    // End of file sentinel
@@ -69,6 +80,7 @@ struct Token {
 inline std::string tokenTypeName(TokenType t) {
     switch (t) {
         case TokenType::NUMBER:    return "NUMBER";
+        case TokenType::FLOAT:     return "FLOAT";
         case TokenType::IDENTIFIER:return "IDENTIFIER";
         case TokenType::PLUS:      return "PLUS (+)";
         case TokenType::MINUS:     return "MINUS (-)";
@@ -83,11 +95,19 @@ inline std::string tokenTypeName(TokenType t) {
         case TokenType::IF:        return "IF";
         case TokenType::ELSE:      return "ELSE";
         case TokenType::END:       return "END";
+        case TokenType::FOR:       return "FOR";
+        case TokenType::REPEAT:    return "REPEAT";
+        case TokenType::BREAK:     return "BREAK";
+        case TokenType::CONTINUE:  return "CONTINUE";
         case TokenType::PRINT:     return "PRINT";
         case TokenType::INPUT:     return "INPUT";
+        case TokenType::PRINTLN:   return "PRINTLN";
         case TokenType::DUP:       return "DUP";
         case TokenType::SWAP:      return "SWAP";
         case TokenType::NEG:       return "NEG";
+        case TokenType::DROP:      return "DROP";
+        case TokenType::F2I:       return "F2I";
+        case TokenType::I2F:       return "I2F";
         case TokenType::EOF_TOKEN: return "EOF";
         default:                   return "UNKNOWN";
     }
@@ -154,6 +174,7 @@ private:
     void validateProgram();
     void validateInstruction();
     int ifDepth;             // tracks nested if/else/end balance
+    int loopDepth;           // tracks nested for/repeat/end balance
 };
 
 // ============================================================
@@ -180,6 +201,8 @@ private:
 
     void parseExpression();
     void parseIfElse();
+    void parseForLoop();
+    void parseRepeat();
 };
 
 #endif // COMPILER_H

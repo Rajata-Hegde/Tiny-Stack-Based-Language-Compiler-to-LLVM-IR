@@ -120,10 +120,15 @@ void emitReturn() {
 }
 
 // ============================================================
-// Push constant to stack
+// Push constant to stack (int or float based on value type)
 // ============================================================
 void emitPushConstant(int value) {
     llvm::Value* constVal = llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), value);
+    valueStack.push(constVal);
+}
+
+void emitPushFloatConstant(double value) {
+    llvm::Value* constVal = llvm::ConstantFP::get(llvm::Type::getDoubleTy(context), value);
     valueStack.push(constVal);
 }
 
@@ -144,7 +149,7 @@ void setVariable(const std::string& name, llvm::Value* value) {
 }
 
 // ============================================================
-// Arithmetic operations
+// Arithmetic operations (support both int and double)
 // ============================================================
 void emitAdd() {
     if (valueStack.size() < 2) {
@@ -153,7 +158,20 @@ void emitAdd() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* result = builder->CreateAdd(left, right, "add_result");
+    
+    llvm::Value* result;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        // Float addition
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        result = builder->CreateFAdd(left, right, "fadd_result");
+    } else {
+        // Integer addition
+        result = builder->CreateAdd(left, right, "add_result");
+    }
     valueStack.push(result);
 }
 
@@ -164,7 +182,18 @@ void emitSub() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* result = builder->CreateSub(left, right, "sub_result");
+    
+    llvm::Value* result;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        result = builder->CreateFSub(left, right, "fsub_result");
+    } else {
+        result = builder->CreateSub(left, right, "sub_result");
+    }
     valueStack.push(result);
 }
 
@@ -175,7 +204,18 @@ void emitMul() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* result = builder->CreateMul(left, right, "mul_result");
+    
+    llvm::Value* result;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        result = builder->CreateFMul(left, right, "fmul_result");
+    } else {
+        result = builder->CreateMul(left, right, "mul_result");
+    }
     valueStack.push(result);
 }
 
@@ -186,7 +226,18 @@ void emitDiv() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* result = builder->CreateSDiv(left, right, "div_result");
+    
+    llvm::Value* result;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        result = builder->CreateFDiv(left, right, "fdiv_result");
+    } else {
+        result = builder->CreateSDiv(left, right, "div_result");
+    }
     valueStack.push(result);
 }
 
@@ -197,12 +248,17 @@ void emitMod() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
+    // Modulo only works on integers
+    if (left->getType() != llvm::Type::getInt32Ty(context))
+        left = builder->CreateFPToSI(left, llvm::Type::getInt32Ty(context), "f2i_left");
+    if (right->getType() != llvm::Type::getInt32Ty(context))
+        right = builder->CreateFPToSI(right, llvm::Type::getInt32Ty(context), "f2i_right");
     llvm::Value* result = builder->CreateSRem(left, right, "mod_result");
     valueStack.push(result);
 }
 
 // ============================================================
-// Comparison operations
+// Comparison operations (support both int and double)
 // ============================================================
 void emitGreater() {
     if (valueStack.size() < 2) {
@@ -211,7 +267,18 @@ void emitGreater() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* cmp = builder->CreateICmpSGT(left, right, "cmp_gt");
+    
+    llvm::Value* cmp;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        cmp = builder->CreateFCmpOGT(left, right, "fcmp_gt");
+    } else {
+        cmp = builder->CreateICmpSGT(left, right, "cmp_gt");
+    }
     valueStack.push(cmp);
 }
 
@@ -222,7 +289,18 @@ void emitLess() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* cmp = builder->CreateICmpSLT(left, right, "cmp_lt");
+    
+    llvm::Value* cmp;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        cmp = builder->CreateFCmpOLT(left, right, "fcmp_lt");
+    } else {
+        cmp = builder->CreateICmpSLT(left, right, "cmp_lt");
+    }
     valueStack.push(cmp);
 }
 
@@ -233,7 +311,18 @@ void emitEqual() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* cmp = builder->CreateICmpEQ(left, right, "cmp_eq");
+    
+    llvm::Value* cmp;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        cmp = builder->CreateFCmpOEQ(left, right, "fcmp_eq");
+    } else {
+        cmp = builder->CreateICmpEQ(left, right, "cmp_eq");
+    }
     valueStack.push(cmp);
 }
 
@@ -244,12 +333,23 @@ void emitNotEqual() {
     }
     llvm::Value* right = valueStack.top(); valueStack.pop();
     llvm::Value* left  = valueStack.top(); valueStack.pop();
-    llvm::Value* cmp = builder->CreateICmpNE(left, right, "cmp_ne");
+    
+    llvm::Value* cmp;
+    if (left->getType() == llvm::Type::getDoubleTy(context) || 
+        right->getType() == llvm::Type::getDoubleTy(context)) {
+        if (left->getType() != llvm::Type::getDoubleTy(context))
+            left = builder->CreateSIToFP(left, llvm::Type::getDoubleTy(context), "i2f_left");
+        if (right->getType() != llvm::Type::getDoubleTy(context))
+            right = builder->CreateSIToFP(right, llvm::Type::getDoubleTy(context), "i2f_right");
+        cmp = builder->CreateFCmpONE(left, right, "fcmp_ne");
+    } else {
+        cmp = builder->CreateICmpNE(left, right, "cmp_ne");
+    }
     valueStack.push(cmp);
 }
 
 // ============================================================
-// Stack manipulation
+// Stack manipulation (including new operations)
 // ============================================================
 void emitDup() {
     if (valueStack.empty()) {
@@ -277,15 +377,61 @@ void emitNeg() {
         return;
     }
     llvm::Value* top = valueStack.top(); valueStack.pop();
-    llvm::Value* result = builder->CreateNeg(top, "neg_result");
+    llvm::Value* result;
+    if (top->getType() == llvm::Type::getDoubleTy(context)) {
+        result = builder->CreateFNeg(top, "fneg_result");
+    } else {
+        result = builder->CreateNeg(top, "neg_result");
+    }
     valueStack.push(result);
 }
 
+void emitDrop() {
+    if (valueStack.empty()) {
+        std::cerr << "codegen error: stack underflow in DROP\n";
+        return;
+    }
+    valueStack.pop();
+}
+
 // ============================================================
-// I/O operations
+// Type conversion operations
+// ============================================================
+void emitF2I() {
+    if (valueStack.empty()) {
+        std::cerr << "codegen error: stack underflow in F2I\n";
+        return;
+    }
+    llvm::Value* val = valueStack.top(); valueStack.pop();
+    if (val->getType() == llvm::Type::getDoubleTy(context)) {
+        llvm::Value* result = builder->CreateFPToSI(val, llvm::Type::getInt32Ty(context), "f2i_result");
+        valueStack.push(result);
+    } else {
+        // Already an integer
+        valueStack.push(val);
+    }
+}
+
+void emitI2F() {
+    if (valueStack.empty()) {
+        std::cerr << "codegen error: stack underflow in I2F\n";
+        return;
+    }
+    llvm::Value* val = valueStack.top(); valueStack.pop();
+    if (val->getType() != llvm::Type::getDoubleTy(context)) {
+        llvm::Value* result = builder->CreateSIToFP(val, llvm::Type::getDoubleTy(context), "i2f_result");
+        valueStack.push(result);
+    } else {
+        // Already a float
+        valueStack.push(val);
+    }
+}
+
+// ============================================================
+// I/O operations (enhanced to support floats)
 // ============================================================
 
-// print — pop TOS and print it as an integer followed by newline
+// print — pop TOS and print it (as integer or float followed by newline)
 void emitPrint() {
     if (valueStack.empty()) {
         std::cerr << "codegen error: stack underflow in PRINT\n";
@@ -294,37 +440,49 @@ void emitPrint() {
 
     llvm::Value* val = valueStack.top(); valueStack.pop();
 
-    // Cast to i32 if it's a boolean (i1)
-    if (val->getType() == llvm::Type::getInt1Ty(context)) {
+    if (val->getType() == llvm::Type::getDoubleTy(context)) {
+        // Print as float: "%.6f\n"
+        llvm::Value* fmtStr = builder->CreateGlobalStringPtr("%.6f\n", "fmt_print_float");
+        builder->CreateCall(printfFunc, { fmtStr, val }, "printf_float_call");
+    } else if (val->getType() == llvm::Type::getInt1Ty(context)) {
+        // Cast boolean to int and print
         val = builder->CreateZExt(val, llvm::Type::getInt32Ty(context), "bool_to_int");
+        llvm::Value* fmtStr = builder->CreateGlobalStringPtr("%d\n", "fmt_print_int");
+        builder->CreateCall(printfFunc, { fmtStr, val }, "printf_int_call");
+    } else {
+        // Print as integer
+        if (val->getType() != llvm::Type::getInt32Ty(context)) {
+            val = builder->CreateFPToSI(val, llvm::Type::getInt32Ty(context), "f2i_print");
+        }
+        llvm::Value* fmtStr = builder->CreateGlobalStringPtr("%d\n", "fmt_print_int");
+        builder->CreateCall(printfFunc, { fmtStr, val }, "printf_int_call");
     }
-
-    // Create format string: "%d\n"
-    llvm::Value* fmtStr = builder->CreateGlobalStringPtr("%d\n", "fmt_print");
-
-    // Call printf(fmt, val)
-    builder->CreateCall(printfFunc, { fmtStr, val }, "printf_call");
 }
 
-// input — read an integer from stdin, push onto stack
+// println — same as print (newline already included)
+void emitPrintln() {
+    emitPrint();  // Our print already includes newline
+}
+
+// input — read a value from stdin, push onto stack
 void emitInput() {
-    // Allocate space for the scanned integer on the stack
+    // Read as double for more flexibility
     llvm::Function* func = builder->GetInsertBlock()->getParent();
     llvm::IRBuilder<> entryBuilder(&func->getEntryBlock(),
                                     func->getEntryBlock().begin());
     llvm::AllocaInst* tmpAlloca = entryBuilder.CreateAlloca(
-        llvm::Type::getInt32Ty(context), nullptr, "input_tmp"
+        llvm::Type::getDoubleTy(context), nullptr, "input_tmp"
     );
 
-    // Create format string: "%d"
-    llvm::Value* fmtStr = builder->CreateGlobalStringPtr("%d", "fmt_scan");
+    // Create format string: "%lf" for double
+    llvm::Value* fmtStr = builder->CreateGlobalStringPtr("%lf", "fmt_scan");
 
     // Call scanf(fmt, &tmp)
     builder->CreateCall(scanfFunc, { fmtStr, tmpAlloca }, "scanf_call");
 
     // Load the scanned value and push onto stack
     llvm::Value* loaded = builder->CreateLoad(
-        llvm::Type::getInt32Ty(context), tmpAlloca, "input_val"
+        llvm::Type::getDoubleTy(context), tmpAlloca, "input_val"
     );
     valueStack.push(loaded);
 }
